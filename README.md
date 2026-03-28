@@ -21,7 +21,7 @@ Each reader has its own **cache-line-padded epoch counter** to prevent false sha
 ## Installation
 
 ```
-go get github.com/halfblown/leftright
+go get github.com/Danglebary/leftright-go
 ```
 
 Requires **Go 1.26+** (generics).
@@ -33,7 +33,7 @@ package main
 
 import (
     "fmt"
-    "github.com/halfblown/leftright"
+    "github.com/Danglebary/leftright-go"
 )
 
 // Define your operation type
