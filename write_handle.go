@@ -139,5 +139,5 @@ func (w *WriteHandle[T, O]) waitForReaders() {
 func (w *WriteHandle[T, O]) Close() {
 	// Flush any pending ops before closing
 	w.Publish()
-	w.inner.closed.Store(true)
+	w.inner.which.Store(closedSentinel)
 }

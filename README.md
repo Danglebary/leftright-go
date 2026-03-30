@@ -6,7 +6,7 @@ Ideal for read-heavy workloads where reader throughput matters more than write l
 
 ## How It Works
 
-Two identical copies of data structure `T` are maintained ("left" and "right"). Readers always access whichever copy the atomic pointer currently references -- no locks, no allocations, just two atomic increments and two atomic loads per read.
+Two identical copies of data structure `T` are maintained ("left" and "right"). Readers always access whichever copy the atomic pointer currently references -- no locks, no allocations, just two atomic increments and one atomic load per read.
 
 The writer appends operations to an oplog. When `Publish()` is called:
 
@@ -140,12 +140,69 @@ func New[T any, O any](
 
 | Path                         | Locks                                 | Allocations                       | Atomics                |
 | ---------------------------- | ------------------------------------- | --------------------------------- | ---------------------- |
-| `Read()`                     | None                                  | Zero                              | 2 increments + 2 loads |
+| `Read()`                     | None                                  | Zero                              | 2 increments + 1 load  |
 | `Append()`                   | None                                  | Amortized zero (slice append)     | None                   |
 | `Publish()`                  | Brief mutex (snapshot epoch counters) | None (reuses snapshot buffer)     | Store + epoch polling  |
 | `ReadHandleFactory.Handle()` | Brief mutex (register slot)           | 1 (epoch slot, cache-line padded) | None                   |
 
 The writer's `waitForReaders()` uses adaptive backoff: it yields via `runtime.Gosched()` for 64 iterations, then switches to exponential sleep backoff (1us to 100us).
+
+### Benchmarks: `lrmap` vs `sync.RWMutex` vs `sync.Map`
+
+Read throughput with 1,000 entries on Apple M1 (8 cores):
+
+**`map[int]int`**
+
+| Benchmark          | `lrmap`     | `sync.RWMutex` | `sync.Map`  |
+| ------------------ | ----------- | -------------- | ----------- |
+| Read (single)      | 16.06 ns/op | 14.19 ns/op    | 10.61 ns/op |
+| Read (parallel)    | 5.25 ns/op  | 75.91 ns/op    | 2.36 ns/op  |
+| Read (under write) | 3.64 ns/op  | 92.62 ns/op    | 2.80 ns/op  |
+
+**`map[string]string`**
+
+| Benchmark          | `lrmap`     | `sync.RWMutex` | `sync.Map`  |
+| ------------------ | ----------- | -------------- | ----------- |
+| Read (single)      | 19.02 ns/op | 14.38 ns/op    | 14.39 ns/op |
+| Read (parallel)    | 5.23 ns/op  | 89.03 ns/op    | 3.17 ns/op  |
+| Read (under write) | 4.33 ns/op  | 89.63 ns/op    | 3.91 ns/op  |
+
+All benchmarks achieve **zero allocations** on the read path.
+
+**Takeaway:** Under contention (parallel reads, or reads concurrent with writes), `lrmap` is **~14-25x faster** than `sync.RWMutex`. `sync.Map` is faster for simple key types due to its internal optimizations, but does not generalize to arbitrary data structures the way leftright does. With string keys, the single-threaded gap between `lrmap` and `sync.Map` narrows significantly (19 vs 14 ns).
+
+Publish latency (single writer, no readers):
+
+| Oplog size | ns/op     |
+| ---------- | --------- |
+| 1          | 23 ns     |
+| 10         | 171 ns    |
+| 100        | 1,688 ns  |
+| 1,000      | 16,955 ns |
+
+Run benchmarks yourself with `just bench` or save a comparison baseline with `just bench-save`.
+
+## Performance Tips
+
+### Batch reads to amortize atomic overhead
+
+Each `Read()` call costs 3 atomic operations (2 increments + 1 load) regardless of how much work the callback does. If you need multiple lookups, batch them into a single `Read()` call:
+
+```go
+// 3 separate Read() calls = 9 atomic ops
+readHandle.Read(func(data *map[string]string) { v1 = (*data)["a"] })
+readHandle.Read(func(data *map[string]string) { v2 = (*data)["b"] })
+readHandle.Read(func(data *map[string]string) { v3 = (*data)["c"] })
+
+// 1 batched Read() call = 3 atomic ops total
+readHandle.Read(func(data *map[string]string) {
+    v1 = (*data)["a"]
+    v2 = (*data)["b"]
+    v3 = (*data)["c"]
+})
+```
+
+Note: `lrmap.Reader` methods like `Get()` and `Contains()` each perform one `Read()` call internally. For bulk lookups, use `ForEach` or drop to the core `leftright` API directly.
 
 ## Design Decisions
 

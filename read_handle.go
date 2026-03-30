@@ -18,7 +18,7 @@ type ReadHandle[T any] struct {
 // Returns false if the ReadHandle has been closed or the WriteHandle
 // has been dropped.
 func (r *ReadHandle[T]) Read(fn func(data *T)) bool {
-	if r.closed || r.inner.closed.Load() {
+	if r.closed {
 		return false
 	}
 
@@ -26,8 +26,11 @@ func (r *ReadHandle[T]) Read(fn func(data *T)) bool {
 	r.slot.epoch.Add(1)
 	// Leave: bump epoch to even (deferred to ensure it runs even if fn panics)
 	defer r.slot.epoch.Add(1)
-	// Read which copy is active
+	// Read which copy is active; closedSentinel means writer has shut down
 	idx := r.inner.which.Load()
+	if idx == closedSentinel {
+		return false
+	}
 	// Execute user function
 	fn(r.inner.data[idx])
 	return true
