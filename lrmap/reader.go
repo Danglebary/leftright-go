@@ -1,6 +1,6 @@
 package lrmap
 
-import "github.com/halfblown/leftright"
+import "github.com/Danglebary/leftright-go"
 
 // Reader provides wait-free read access to the concurrent map.
 // Each goroutine should have its own Reader instance; a Reader

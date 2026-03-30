@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/halfblown/leftright/lrmap"
+	"github.com/Danglebary/leftright-go/lrmap"
 )
 
 func TestNewReturnsNonNil(t *testing.T) {

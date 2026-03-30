@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 )
 
-// inner holdes the shared state between readers and the writer.
+// inner holds the shared state between readers and the writer.
 type inner[T any] struct {
 	// data holds pointers to the two copies.
 	data [2]*T

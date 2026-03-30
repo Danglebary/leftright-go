@@ -15,7 +15,7 @@
 // will cause data races. All mutations must go through the Writer.
 package lrmap
 
-import "github.com/halfblown/leftright"
+import "github.com/Danglebary/leftright-go"
 
 type opKind uint8
 

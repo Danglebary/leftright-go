@@ -1,6 +1,6 @@
 package lrmap
 
-import "github.com/halfblown/leftright"
+import "github.com/Danglebary/leftright-go"
 
 // ReaderFactory creates Reader instances. It is safe for concurrent
 // use from multiple goroutines. Each goroutine that needs to read

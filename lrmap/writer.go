@@ -1,6 +1,6 @@
 package lrmap
 
-import "github.com/halfblown/leftright"
+import "github.com/Danglebary/leftright-go"
 
 // Writer provides write access to the concurrent map.
 // A Writer must not be used concurrently from multiple goroutines.

@@ -154,3 +154,11 @@ The writer's `waitForReaders()` uses adaptive backoff: it yields via `runtime.Go
 - **Function-based absorb** instead of an interface to avoid self-referential type constraints in Go generics.
 - **Clone at construction** instead of `Default` -- avoids the Rust footgun where two `Default` instances may differ (e.g., `HashMap` with random hasher seeds).
 - **Sequential consistency** via Go's `sync/atomic` -- no attempt to use relaxed ordering like the Rust version
+
+## Caveats
+
+- **No writer-side reads.** `WriteHandle` has no `Read` method. The writer cannot inspect the current state of the data structure. Patterns like "set if absent" or "read-modify-write" cannot be expressed through the leftright API alone; maintain a secondary index or shadow state externally if needed.
+
+- **Shallow-copy semantics.** If `T` is or contains pointer types, the `clone` function and `AbsorbFunc` must deep-copy any referenced data. Otherwise both copies share the same underlying pointer, and mutations through one copy will corrupt the other, bypassing the leftright protocol entirely. This applies equally to the `lrmap` package: if `V` is a pointer or contains pointers, mutations through the pointer are data races.
+
+- **Reader handle lifecycle.** Each `ReadHandle` must be closed when no longer needed via `Close()`. Leaked handles accumulate slots in the reader registry, increasing `Publish()` latency and consuming memory. A runtime finalizer provides a safety net for leaked handles, but explicit `Close()` (typically via `defer`) is strongly preferred. `Read()` returns `false` after a handle is closed.
